@@ -69,6 +69,21 @@ function! s:test_dir_xdg() abort
   endtry
 endfunction
 
+" A file outside any repository, with the current directory in one: both
+" say the current directory's repository
+function! s:test_get_and_dir_agree() abort
+  execute 'edit' fnameescape(s:tmp . '/plain/file.txt')
+  execute 'cd' fnameescape(s:tmp . '/repo')
+  call assert_equal({'dir': s:tmp . '/repo', 'repo': 1}, roumail_place#get())
+  call assert_equal(s:tmp . '/repo/.git/p', roumail_place#dir('p'))
+  " A buffer of a repository fugitive hasn't seen yet: by its path
+  execute 'badd' fnameescape(s:tmp . '/linked/other.txt')
+  let l:linked = bufnr(s:tmp . '/linked/other.txt')
+  call assert_equal({'dir': s:tmp . '/linked', 'repo': 1}, roumail_place#get(l:linked))
+  call assert_equal(s:tmp . '/repo/.git/worktrees/linked/q',
+        \ roumail_place#dir('q', {'bufnr': l:linked, 'worktree': 1}))
+endfunction
+
 function! s:test_get() abort
   execute 'edit' fnameescape(s:tmp . '/repo/file.txt')
   call assert_equal({'dir': s:tmp . '/repo', 'repo': 1}, roumail_place#get())

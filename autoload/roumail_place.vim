@@ -1,15 +1,12 @@
-" vim-place: where a plugin is working, and where it keeps its files
+" vim-place: where plugins keep their files (dir), and the repository they work in (get)
 
 " The work tree of the buffer's repository, else of the current directory's,
-" else the current directory, as {dir, repo}
+" else the current directory, as {dir, repo}: the same repository dir()
+" keeps files in
 function! roumail_place#get(...) abort
-  for l:gitdir in [FugitiveGitDir(get(a:, 1, bufnr())), FugitiveExtractGitDir(getcwd())]
-    let l:tree = empty(l:gitdir) ? '' : FugitiveWorkTree(l:gitdir)
-    if !empty(l:tree)
-      return {'dir': l:tree, 'repo': 1}
-    endif
-  endfor
-  return {'dir': getcwd(), 'repo': 0}
+  let l:gitdir = s:git_dir(get(a:, 1, bufnr()))
+  let l:tree = empty(l:gitdir) ? '' : FugitiveWorkTree(l:gitdir)
+  return empty(l:tree) ? {'dir': getcwd(), 'repo': 0} : {'dir': l:tree, 'repo': 1}
 endfunction
 
 " Where a plugin keeps its files, named name: in the git dir of the
@@ -23,7 +20,10 @@ endfunction
 "             by all work trees, so files outlive the work tree)
 function! roumail_place#dir(name, ...) abort
   let l:opts = get(a:, 1, {})
-  let l:git_dir = s:git_dir(get(l:opts, 'bufnr', -1), get(l:opts, 'worktree', 0))
+  let l:git_dir = s:git_dir(get(l:opts, 'bufnr', bufnr()))
+  if !empty(l:git_dir) && !get(l:opts, 'worktree', 0)
+    let l:git_dir = FugitiveCommonDir(l:git_dir)
+  endif
   if empty(l:git_dir)
     " Each directory's files apart, as a repository's are in its git dir
     let l:place = roumail_place#get(get(l:opts, 'bufnr', bufnr())).dir
@@ -43,16 +43,13 @@ function! s:outside() abort
   return empty($XDG_STATE_HOME) ? expand('~/.local/state') : $XDG_STATE_HOME
 endfunction
 
-" Found by fugitive: the buffer's, else, for a buffer that isn't a file,
-" the current directory's
-function! s:git_dir(bufnr, worktree) abort
-  let l:bufnr = a:bufnr < 0 ? bufnr() : a:bufnr
-  let l:dir = a:bufnr < 0 ? FugitiveGitDir() : FugitiveGitDir(l:bufnr)
-  if empty(l:dir)
-    " Fugitive sets a buffer's git dir once it is current: else by its path
-    let l:file = empty(bufname(l:bufnr)) || !empty(getbufvar(l:bufnr, '&buftype'))
-          \ ? getcwd() : fnamemodify(bufname(l:bufnr), ':p')
-    let l:dir = FugitiveExtractGitDir(l:file)
+" The git dir of the buffer's repository, else of the current directory's,
+" else '': one answer for get() and dir(). Fugitive sets a buffer's git dir
+" once it is current: before that, the file's path tells it
+function! s:git_dir(bufnr) abort
+  let l:dir = FugitiveGitDir(a:bufnr)
+  if empty(l:dir) && !empty(bufname(a:bufnr)) && empty(getbufvar(a:bufnr, '&buftype'))
+    let l:dir = FugitiveExtractGitDir(fnamemodify(bufname(a:bufnr), ':p'))
   endif
-  return empty(l:dir) || a:worktree ? l:dir : FugitiveCommonDir(l:dir)
+  return empty(l:dir) ? FugitiveExtractGitDir(getcwd()) : l:dir
 endfunction
